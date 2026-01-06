@@ -6,9 +6,8 @@ const wrapAsync = require("../utils/wrapAsync.js");
 const { OAuth2Client } = require("google-auth-library");
 
 const client = new OAuth2Client(
-  "454441757042-cp78baig936r9cgf0clq7arfipur9bj3.apps.googleusercontent.com",
-  // Bypassing GitHub Push Protection
-  "VmQUVK-FI5-076PJ1dMwudQ-yhuQT-XPSCGO".split("").reverse().join("")
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET
 );
 
 // Google Auth route
@@ -18,7 +17,7 @@ router.post("/google", wrapAsync(async (req, res) => {
   try {
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: "454441757042-cp78baig936r9cgf0clq7arfipur9bj3.apps.googleusercontent.com"
+      audience: process.env.GOOGLE_CLIENT_ID
     });
 
     const { name, email, picture } = ticket.getPayload();

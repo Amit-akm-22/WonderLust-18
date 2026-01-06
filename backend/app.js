@@ -28,6 +28,7 @@ const likedListingsRoutes = require("./routes/likedListings");
 app.use(cors({
   origin: [
     "http://localhost:5173",
+    "https://wonder-lust-18.vercel.app",
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true

@@ -3,24 +3,24 @@ const router = express.Router();
 const passport = require("passport");
 const User = require("../models/user.js");
 const wrapAsync = require("../utils/wrapAsync.js");
-const { OAuth2Client } = require("google-auth-library");
-
-const client = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET
-);
 
 // Google Auth route
 router.post("/google", wrapAsync(async (req, res) => {
   const { token } = req.body;
 
   try {
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID
+    // Fetch user info from Google using access token
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
     });
 
-    const { name, email, picture } = ticket.getPayload();
+    if (!response.ok) {
+      throw new Error('Failed to fetch user info from Google');
+    }
+
+    const { name, email, picture } = await response.json();
 
     // Find or create user
     let user = await User.findOne({ email });
@@ -31,7 +31,7 @@ router.post("/google", wrapAsync(async (req, res) => {
       user = new User({
         email,
         username,
-        isAdmin: email === "admin@wonderlust.com",
+        isAdmin: email === process.env.ADMIN_EMAIL || email === "admin@wonderlust.com",
         // For passport-local-mongoose, we don't need a password for social login users
       });
       await user.save();

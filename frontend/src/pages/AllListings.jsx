@@ -40,13 +40,17 @@ function AllListings({ user }) {
   };
 
   const fetchLikedListings = async () => {
+    // Only fetch if a token exists to avoid unnecessary 401 console errors
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     try {
       const res = await axios.get('/api/liked/liked-listings');
       if (res.data.success) {
         setLikedListings(res.data.data.map(l => l._id));
       }
     } catch (err) {
-      console.error("Error fetching liked listings");
+      console.warn("Background liked listings fetch failed (usually due to stale token)");
     }
   };
 

@@ -3,17 +3,13 @@ const app = express();
 const mongoose = require("mongoose");
 const path = require("path");
 const methodOverride = require("method-override");
-const session = require("express-session");
-const MongoStore = require("connect-mongo");
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
 const cors = require("cors");
 require('dotenv').config();
 
-
 // MongoDB URL from environment variable
 const LiveURL = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/Wonderlust";
-
 
 // Import models
 const User = require("./models/user.js");
@@ -28,53 +24,39 @@ const likedListingsRoutes = require("./routes/likedListings");
 app.use(cors({
   origin: [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://wonder-lust-18.vercel.app",
     process.env.FRONTEND_URL
   ].filter(Boolean),
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-
-// Session configuration
-const store = MongoStore.create({
-  mongoUrl: LiveURL,
-  touchAfter: 24 * 60 * 60,
+// Debug Route
+app.get("/api/debug/headers", (req, res) => {
+  res.json({ headers: req.headers, auth: req.headers.authorization });
 });
 
-store.on("error", (err) => {
-  console.log("Session store error:", err);
+app.set("trust proxy", 1);
+
+// Set security headers (Vite handles this in dev, Vercel/Render in prod)
+app.use((req, res, next) => {
+  // We remove the strict COOP header from API to avoid blocking Google popups on frontend
+  // res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
 });
 
-const sessionOptions = {
-  store,
-  secret: process.env.SECRET || "your-secret-key",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-    sameSite: "lax", // Good for local dev with credentials
-  },
-};
-
-// Middleware
-app.use(express.json()); // Essential for MERN stack to parse JSON bodies
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
-app.use(session(sessionOptions));
+
+// JWT Authentication - stateless, no session needed
 app.use(passport.initialize());
-app.use(passport.session());
 
 passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
-
-// Global variables middleware (Simplified for API)
-app.use((req, res, next) => {
-  res.locals.currentUser = req.user;
-  next();
-});
 
 // Database Connection
 async function main() {
@@ -105,4 +87,3 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`);
 });
-

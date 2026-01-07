@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import axios from 'axios'
 import { Mail, Lock, User, ArrowRight, MapPin } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useGoogleLogin } from '@react-oauth/google'
+import { GoogleLogin } from '@react-oauth/google'
 
 function Auth({ onLogin }) {
     const [isLogin, setIsLogin] = useState(true);
@@ -39,24 +39,48 @@ function Auth({ onLogin }) {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const googleLogin = useGoogleLogin({
-        onSuccess: async (tokenResponse) => {
-            try {
-                const res = await axios.post('/api/users/google', { token: tokenResponse.access_token });
-                if (res.data.success) {
-                    onLogin();
-                    const from = location.state?.from || '/';
-                    navigate(from);
-                }
-            } catch (err) {
-                setError("Google authentication failed");
+    const handleGoogleSuccess = async (credentialResponse) => {
+        try {
+            console.log("Google Login Success, credential received");
+            const res = await axios.post('/api/users/google', { idToken: credentialResponse.credential });
+            if (res.data.success) {
+                const userData = { ...res.data.user, token: res.data.token };
+                localStorage.setItem('user', JSON.stringify(userData));
+                localStorage.setItem('token', res.data.token);
+                onLogin();
+                const from = location.state?.from || '/';
+                navigate(from);
             }
-        },
-        onError: () => {
-            setError("Google Login failed. Please try again.");
-        },
-        flow: 'implicit'
-    });
+        } catch (err) {
+            console.error("Google Auth Error:", err);
+            setError("Google authentication failed. Please try again.");
+        }
+    };
+
+    const handleGoogleError = (err) => {
+        console.error("Google Auth Component Error:", err);
+        setError(
+            <div className="google-origin-error" style={{ border: '2px solid #e53e3e', padding: '15px', borderRadius: '12px', background: '#fff' }}>
+                <strong style={{ color: '#e53e3e', fontSize: '16px', display: 'block', marginBottom: '8px' }}>Google Login Blocked! 🛑</strong>
+                <p>Google is blocking the login because <strong>localhost:5173</strong> is not authorized yet.</p>
+                <div style={{ marginTop: '12px', padding: '15px', background: '#fef2f2', borderRadius: '12px', border: '2px dashed #ef4444' }}>
+                    <p style={{ fontWeight: '800', fontSize: '14px', marginBottom: '8px', color: '#b91c1c' }}>REQUIRED ACTION:</p>
+                    <ol style={{ textAlign: 'left', fontSize: '13px', marginLeft: '20px', color: '#444', lineHeight: '1.5' }}>
+                        <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontWeight: 'bold', textDecoration: 'underline' }}>Google Cloud Console</a></li>
+                        <li>Click on your <strong>OAuth 2.0 Client ID</strong></li>
+                        <li>Under <strong>"Authorized JavaScript origins"</strong>, add:
+                            <div style={{ margin: '5px 0', padding: '5px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px' }}>
+                                <code>http://localhost:5173</code><br />
+                                <code>http://127.0.0.1:5173</code>
+                            </div>
+                        </li>
+                        <li>Click <strong>SAVE</strong> and wait 2 minutes</li>
+                        <li><strong>Refresh</strong> this page and try again!</li>
+                    </ol>
+                </div>
+            </div>
+        );
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -65,6 +89,9 @@ function Auth({ onLogin }) {
         try {
             const res = await axios.post(endpoint, formData);
             if (res.data.success) {
+                const userData = { ...res.data.user, token: res.data.token };
+                localStorage.setItem('user', JSON.stringify(userData));
+                localStorage.setItem('token', res.data.token); // Still keep 'token' for backward compat
                 onLogin();
                 // Redirect back to original target if exists
                 const from = location.state?.from || '/';
@@ -181,15 +208,14 @@ function Auth({ onLogin }) {
                         </div>
 
                         <div className="google-auth-box">
-                            <button onClick={() => googleLogin()} className="google-custom-btn">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4" />
-                                    <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.76-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853" />
-                                    <path d="M4.405 11.9c-.2-.6-.314-1.24-.314-1.9 0-.66.114-1.3.314-1.9V5.51H1.064A9.996 9.996 0 000 10c0 1.614.386 3.14 1.064 4.49l3.34-2.59z" fill="#FBBC05" />
-                                    <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0 6.09 0 2.71 2.24 1.064 5.51l3.34 2.59C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335" />
-                                </svg>
-                                {isLogin ? 'Sign in with Google' : 'Sign up with Google'}
-                            </button>
+                            <GoogleLogin
+                                onSuccess={handleGoogleSuccess}
+                                onError={handleGoogleError}
+                                theme="filled_blue"
+                                shape="pill"
+                                width="380"
+                                text={isLogin ? 'signin_with' : 'signup_with'}
+                            />
                         </div>
 
                         <p className="switch-footer">

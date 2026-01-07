@@ -1,12 +1,9 @@
 const Listing = require("../models/listing.js");
 const Review = require("../models/review.js");
 
-module.exports.isLoggedIn = (req, res, next) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ success: false, message: "Authentication required" });
-  }
-  next();
-};
+const { authenticateToken } = require("./auth");
+
+module.exports.isLoggedIn = authenticateToken;
 
 module.exports.isOwner = async (req, res, next) => {
   try {

@@ -12,38 +12,103 @@ import Auth from './pages/Auth'
 import LikedListings from './pages/LikedListings'
 import Checkout from './pages/Checkout'
 
-// Set Axios Base URL for Production & Development
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
-axios.defaults.withCredentials = true; // Important for session cookies
-
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    // Initialize user from localStorage for snappy UI
+    const storedUser = localStorage.getItem('user');
+    console.log("App: Initializing user state from localStorage. Key 'user' exists:", !!storedUser);
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        console.log("App: Successfully parsed user from localStorage:", parsed);
+        return parsed;
+      } catch (e) {
+        console.error("App: Failed to parse user JSON from localStorage", e);
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isInitialCheckDone, setIsInitialCheckDone] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    checkAuth();
+    const runInitialCheck = async () => {
+      console.log("App: Starting initial checkAuth...");
+      await checkAuth();
+      setIsInitialCheckDone(true);
+      console.log("App: Initial checkAuth complete.");
+    };
+    runInitialCheck();
+
+    // Listen for auth failures from main.jsx interceptor
+    const handleAuthFailure = () => {
+      console.log("App: Auth failure detected, clearing state.");
+      setUser(null);
+    };
+    window.addEventListener('auth-failure', handleAuthFailure);
+    return () => window.removeEventListener('auth-failure', handleAuthFailure);
   }, []);
 
   const checkAuth = async () => {
+    const token = localStorage.getItem('token') || (user && user.token);
+    console.log("App: Performing checkAuth. Token found:", !!token);
+
+    if (!token && !localStorage.getItem('user')) {
+      console.log("App: No token or user in storage, skipping status check");
+      return;
+    }
+
     try {
       const res = await axios.get('/api/users/status');
+      console.log("App: Status check response:", res.data);
       if (res.data.isAuthenticated) {
-        setUser(res.data.user);
+        const userData = { ...res.data.user, token: token || res.data.token };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        console.log("App: User authenticated as:", userData.username || userData.name);
+      } else {
+        console.warn("App: Status check says NOT authenticated. Cleaning up storage...");
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
       }
     } catch (err) {
-      console.error("Auth check failed");
+      console.error("App: Auth check request failed", err.message);
+
+      // CRITICAL: Only clear state if it's a 401 Unauthorized or 403 Forbidden
+      // If it's a 404 (User Not Found) or 500 (Server Error), we might want to be less aggressive
+      if (err.response) {
+        console.log("App: Error Status:", err.response.status);
+        if (err.response.status === 401 || err.response.status === 403) {
+          console.warn("App: Unauthorized access (401/403). Clearing session data.");
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        } else if (err.response.status === 404) {
+          console.warn("App: User not found on server (404). This might happen with manual placeholder IDs.");
+          // We'll clear it just to be safe and avoid infinite reload loops
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          setUser(null);
+        }
+      }
     }
   };
 
   const handleLogout = async () => {
     try {
       await axios.get('/api/users/logout');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       setUser(null);
       navigate('/');
     } catch (err) {
       console.error("Logout failed");
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
     }
   };
 
@@ -93,7 +158,7 @@ function App() {
                 <>
                   <button className="profile-trigger">
                     <User size={20} />
-                    <span className="user-name-text">{user.username}</span>
+                    <span className="user-name-text">{user.username || user.name || user.role || 'User'}</span>
                   </button>
                   <button onClick={handleLogout} className="logout-action-btn" title="Logout">
                     <LogOut size={18} />
@@ -111,15 +176,22 @@ function App() {
       </nav>
 
       <main className="main-viewport">
-        <Routes>
-          <Route path="/" element={<AllListings user={user} />} />
-          <Route path="/listings/:id" element={<ListingDetails user={user} />} />
-          <Route path="/listings/new" element={<NewListing />} />
-          <Route path="/listings/:id/edit" element={<EditListing />} />
-          <Route path="/auth" element={<Auth onLogin={checkAuth} />} />
-          <Route path="/liked" element={<LikedListings />} />
-          <Route path="/checkout" element={<Checkout />} />
-        </Routes>
+        {!isInitialCheckDone ? (
+          <div className="loading-screen-full">
+            <div className="loader-pink"></div>
+            <p>Syncing your adventure...</p>
+          </div>
+        ) : (
+          <Routes>
+            <Route path="/" element={<AllListings user={user} />} />
+            <Route path="/listings/:id" element={<ListingDetails user={user} />} />
+            <Route path="/listings/new" element={<NewListing />} />
+            <Route path="/listings/:id/edit" element={<EditListing />} />
+            <Route path="/auth" element={<Auth onLogin={checkAuth} />} />
+            <Route path="/liked" element={<LikedListings />} />
+            <Route path="/checkout" element={<Checkout />} />
+          </Routes>
+        )}
       </main>
 
       {location.pathname !== '/auth' && location.pathname !== '/checkout' && (
@@ -175,7 +247,32 @@ function App() {
       )}
 
       <style>{`
-        .navbar-premium {
+                .loading-screen-full {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 70vh;
+                    gap: 20px;
+                    color: #666;
+                    font-weight: 600;
+                }
+
+                .loader-pink {
+                    width: 50px;
+                    height: 50px;
+                    border: 5px solid #f3f3f3;
+                    border-top: 5px solid var(--primary);
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+
+                .navbar-premium {
           position: sticky;
           top: 0;
           z-index: 1000;

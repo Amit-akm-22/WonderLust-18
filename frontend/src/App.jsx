@@ -11,6 +11,7 @@ import EditListing from './pages/EditListing'
 import Auth from './pages/Auth'
 import LikedListings from './pages/LikedListings'
 import Checkout from './pages/Checkout'
+import ScrollToTop from './components/ScrollToTop'
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -114,6 +115,7 @@ function App() {
 
   return (
     <div className="app">
+      <ScrollToTop />
       <nav className="navbar-premium glass">
         <div className="container nav-box">
           <Link to="/" className="branding">

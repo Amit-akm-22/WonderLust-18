@@ -9,7 +9,7 @@ const cors = require("cors");
 require('dotenv').config();
 
 // MongoDB URL from environment variable
-const LiveURL = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/Wonderlust";
+const LiveURL = process.env.MONGODB_URL || "mongodb+srv://amitakm18_db_user:VmnHq2TYYT2M269C@cluster0.nwxtt7a.mongodb.net/?appName=Cluster0";
 
 // Import models
 const User = require("./models/user.js");
